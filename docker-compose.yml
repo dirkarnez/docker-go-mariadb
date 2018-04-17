@@ -1,0 +1,18 @@
+version: "2"
+services:
+  mariadb:
+    environment:
+      - MYSQL_ROOT_PASSWORD=123456
+    image: mariadb
+    ports:
+      - "3306:3306"
+  web:
+    build: .
+    volumes:
+      - ./app:/go/src/eating.com/app
+    ports:
+      - "5000:5000"
+    links:
+      - mariadb
+
+
