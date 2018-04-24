@@ -8,4 +8,4 @@ VOLUME ["/go/src/eating.com/app"]
 
 RUN go get github.com/go-sql-driver/mysql
 RUN go build
-CMD again --bin=main run 
+CMD again --bin=main run
