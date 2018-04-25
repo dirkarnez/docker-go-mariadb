@@ -1,11 +1,12 @@
 ﻿package main
+
 import (
 	"net"
 	"net/http"
 	"io"
-	"fmt"
 	"log"
-	//"github.com/astaxie/beego/orm"
+	"fmt"
+	"github.com/astaxie/beego/orm"
 	_ "github.com/go-sql-driver/mysql"
 	"google.golang.org/grpc"
 	"golang.org/x/net/context"
@@ -16,19 +17,21 @@ import (
 
 type User struct {
     Id          int
-    Name        string
+    LoginName   string
+    Password	string
     Profile     *Profile   `orm:"rel(one)"` // OneToOne relation
 }
 
 type Profile struct {
     Id          int
+    Name   		string
     Age         int16
 }
 
 func init() {
-    //orm.RegisterDriver("mysql", orm.DRMySQL)
-   // orm.RegisterDataBase("default", "mysql", "root:123456@tcp(mariadb:3306)/eating?charset=utf8")
-	//orm.RegisterModel(new(User), new(Profile))
+    orm.RegisterDriver("mysql", orm.DRMySQL)
+   	orm.RegisterDataBase("default", "mysql", "root:123456@tcp(mariadb:3306)/eating?charset=utf8")
+	orm.RegisterModel(new(User), new(Profile))
 }
 
 func helloHandler(w http.ResponseWriter, r *http.Request) {
@@ -37,14 +40,45 @@ func helloHandler(w http.ResponseWriter, r *http.Request) {
 
 var version string
 
-type server struct {
-
-}
+type server struct { }
 
 func (s *server) Login(ctx context.Context, r *pb.LoginRequest) (*pb.LoginResponse, error) {
-	fmt.Println("See u")
+	err := o.Begin()
+
+    if err != nil {
+    	return nil, err
+    }
+    
+    profile := new(Profile)	
+    profile.Name = r.Username
+    profile.Age = 30
+
+    user := new(User)
+    user.Profile = profile
+    user.LoginName = r.Username
+    user.Password = r.Password
+
+	_, err = o.Insert(profile)
+	if err != nil {
+		o.Rollback()
+		return nil, err
+	} 
+
+	userId, err := o.Insert(user)
+	if err != nil {
+		o.Rollback()
+		return nil, err
+	} 
+
+	err = o.Commit()
+	if err != nil {
+		o.Rollback()
+		return nil, err
+	} 
+
+
 	rr := new(pb.LoginResponse)
-	rr.Token = "HAHAHddA"
+	rr.Token = fmt.Sprint("HAHAHddA", userId)
 	rr.Functions = append(rr.Functions, new(pb.Function))
 	return rr, nil
 }
@@ -69,41 +103,36 @@ func (s *server) SayHello(ctx context.Context, r *pb.Request) (*pb.Response, err
 	return &pb.Response{Token: "Hello, !"}, nil
 }
 
+/*
+CREATE DATABASE eating
+  DEFAULT CHARACTER SET utf8
+  DEFAULT COLLATE utf8_general_ci;
+
+SELECT *
+FROM user u INNER JOIN profile p ON u.profile_id = p.id
+*/
+var (
+	o orm.Ormer
+)
+
 func main() {
 	lis, errr := net.Listen("tcp", ":5000")
 	if errr != nil {
 		log.Fatalf("failed to listen: %v", errr)
 	}
-	/*o := orm.NewOrm()
+
+	o = orm.NewOrm()
     o.Using("default") 
-    
+
 	err := orm.RunSyncdb("default", true, true)
 	if err != nil {
-	    fmt.Println(err)
+	    log.Fatalf(err.Error())
 	}
 
-    profile := new(Profile)	
-    profile.Age = 30
-
-    user := new(User)
-    user.Profile = profile
-    user.Name = "12345陳"
-	o.Insert(profile)
-	o.Insert(user)*/
-	fmt.Println("Hello World")
 	grpcServer := grpc.NewServer()
 	pb.RegisterAuthServer(grpcServer,  &server{})
 	if err := grpcServer.Serve(lis); err != nil {
 		log.Fatalf("failed to serve: %v", err)
 	}
-	// db, err := sql.Open("mysql", "root:123456@tcp(mariadb:3306)/")
-	// defer db.Close()
-	// if err != nil {
-	// 		fmt.Print(err.Error())
-	// }
-	// db.QueryRow("SELECT VERSION()").Scan(&version)
-	// fmt.Println("Connected to:", version)
-	// http.HandleFunc("/", helloHandler)
-	// http.ListenAndServe(":5000", nil)
 }
 
